@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:smart_farming/auth/screens/login_screen.dart' show LoginScreen;
+import 'package:go_router/go_router.dart';
 import 'package:smart_farming/theme/app_colors.dart' show AppColors;
 
 class OnboardingScreen extends StatelessWidget {
@@ -113,13 +113,7 @@ class OnboardingScreen extends StatelessWidget {
                     child: InkWell(
                       borderRadius: BorderRadius.circular(28),
                       onTap: () {
-                        // TODO: navigate to signup screen
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => const LoginScreen(),
-                          ),
-                        );
+                        context.push('/signup');
                       },
                       child: const Center(
                         child: Row(
@@ -134,6 +128,7 @@ class OnboardingScreen extends StatelessWidget {
                               ),
                             ),
                             SizedBox(width: 8),
+
                             Icon(
                               Icons.arrow_forward_rounded,
                               color: AppColors.textPrimary,
@@ -152,7 +147,7 @@ class OnboardingScreen extends StatelessWidget {
               // ---------- Sign In ----------
               TextButton(
                 onPressed: () {
-                  // TODO: navigate to login screen
+                  context.push('/login');
                 },
                 child: const Text(
                   'Sign In',

@@ -1,7 +1,6 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
-import 'package:smart_farming/auth/screens/signup_screen.dart'
-    show SignupScreen;
+import 'package:go_router/go_router.dart';
 import 'package:smart_farming/theme/app_colors.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -222,11 +221,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     child: InkWell(
                       borderRadius: BorderRadius.circular(28),
                       onTap: () {
-                        // TODO: handle sign in
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (_) => SignupScreen()),
-                        );
+                        context.go('/home');
                       },
 
                       child: const Center(
@@ -260,7 +255,7 @@ class _LoginScreenState extends State<LoginScreen> {
               Center(
                 child: RichText(
                   text: TextSpan(
-                    text: "Don't have account",
+                    text: "Don't have account? ",
                     style: TextStyle(
                       fontSize: 14,
                       color: AppColors.textSecondary,
@@ -269,15 +264,13 @@ class _LoginScreenState extends State<LoginScreen> {
                     children: [
                       TextSpan(
                         text: "Register",
-                        style: TextStyle(color: AppColors.accentPink),
+                        style: TextStyle(
+                          color: AppColors.accentPink,
+                          fontWeight: FontWeight.w600,
+                        ),
                         recognizer: TapGestureRecognizer()
                           ..onTap = () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => const SignupScreen(),
-                              ),
-                            );
+                            context.push('/signup');
                           },
                       ),
                     ],

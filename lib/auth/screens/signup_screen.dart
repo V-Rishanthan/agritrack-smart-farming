@@ -1,7 +1,6 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
-import 'package:smart_farming/auth/screens/login_screen.dart' show LoginScreen;
-import 'package:smart_farming/features/home/home_screen.dart';
+import 'package:go_router/go_router.dart';
 import 'package:smart_farming/theme/app_colors.dart' show AppColors;
 
 class SignupScreen extends StatefulWidget {
@@ -19,7 +18,7 @@ class _SignupScreenState extends State<SignupScreen> {
 
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
-  bool _agreedToTerms = false;
+  // bool _agreedToTerms = false;
 
   @override
   void dispose() {
@@ -303,12 +302,7 @@ class _SignupScreenState extends State<SignupScreen> {
                         child: InkWell(
                           borderRadius: BorderRadius.circular(28),
                           onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => const HomeScreen(),
-                              ),
-                            );
+                            context.go('/home');
                           },
                           child: const Center(
                             child: Row(
@@ -357,13 +351,7 @@ class _SignupScreenState extends State<SignupScreen> {
                             ),
                             recognizer: TapGestureRecognizer()
                               ..onTap = () {
-                                // TODO: navigate to login screen
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) => const LoginScreen(),
-                                  ),
-                                );
+                                context.go('/login');
                               },
                           ),
                         ],

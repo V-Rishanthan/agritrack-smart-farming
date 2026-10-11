@@ -9,8 +9,6 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  int _currentNavIndex = 0;
-
   // ---------------------------------------------------------------------
   // MOCK / DUMMY DATA — replace these with Firestore data later.
   // Keep the shapes (fields) the same so swapping to Firebase is a
@@ -58,7 +56,7 @@ class _HomeScreenState extends State<HomeScreen> {
       tag: 'Diesel',
       tagColor: AppColors.textSecondary,
       time: 'Yesterday • 220 Liters / Pump #2',
-      amount: '−₹19,800',
+      amount: 'LKR 19,800',
       amountColor: AppColors.danger,
       status: 'FUEL OPEX',
       statusColor: AppColors.danger,
@@ -100,7 +98,6 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
       ),
-      bottomNavigationBar: _buildBottomNav(),
     );
   }
 
@@ -573,84 +570,6 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // ---------------- Bottom Nav ----------------
-  Widget _buildBottomNav() {
-    final items = [
-      _NavItem(icon: Icons.grid_view_rounded, label: 'Home'),
-      _NavItem(icon: Icons.groups_outlined, label: 'Owners'),
-      _NavItem(icon: Icons.local_shipping_outlined, label: 'Driver'),
-      _NavItem(icon: Icons.receipt_long_outlined, label: 'Expenses'),
-      _NavItem(icon: Icons.show_chart_rounded, label: 'Analysis'),
-    ];
-
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 10),
-      decoration: const BoxDecoration(
-        color: AppColors.navBackground,
-        border: Border(top: BorderSide(color: AppColors.divider)),
-      ),
-      child: SafeArea(
-        top: false,
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-          children: List.generate(items.length, (index) {
-            final isSelected = index == _currentNavIndex;
-            return GestureDetector(
-              onTap: () => setState(() => _currentNavIndex = index),
-              child: isSelected
-                  ? Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 8,
-                      ),
-                      decoration: BoxDecoration(
-                        gradient: AppColors.primaryGradient,
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(
-                            items[index].icon,
-                            color: Colors.white,
-                            size: 18,
-                          ),
-                          const SizedBox(width: 6),
-                          Text(
-                            items[index].label,
-                            style: const TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.white,
-                            ),
-                          ),
-                        ],
-                      ),
-                    )
-                  : Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          items[index].icon,
-                          color: AppColors.navInactive,
-                          size: 20,
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          items[index].label,
-                          style: const TextStyle(
-                            fontSize: 11,
-                            color: AppColors.navInactive,
-                          ),
-                        ),
-                      ],
-                    ),
-            );
-          }),
-        ),
-      ),
-    );
-  }
-
   // ---------------- Helpers ----------------
   String _formatIndianCurrency(double amount) {
     final wholePart = amount.toInt().toString();
@@ -946,11 +865,4 @@ class _FieldActivity {
     required this.statusColor,
     required this.icon,
   });
-}
-
-class _NavItem {
-  final IconData icon;
-  final String label;
-
-  _NavItem({required this.icon, required this.label});
 }
