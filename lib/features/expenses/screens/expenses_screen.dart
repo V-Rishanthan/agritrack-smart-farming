@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:smart_farming/features/expenses/screens/add_expenses_screen.dart'
     show AddExpensesScreen;
-import 'package:smart_farming/services/expense_service.dart'; // NEW
+import 'package:smart_farming/services/expense_service.dart';
 import 'package:smart_farming/theme/app_colors.dart' show AppColors;
 import 'package:calendar_date_picker2/calendar_date_picker2.dart';
 
