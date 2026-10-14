@@ -16,79 +16,27 @@ class _OwnersScreenState extends State<OwnersScreen> {
   int _selectedSeasonIndex = 0;
   int _selectedFilterIndex = 0;
 
-  // ---------------------------------------------------------------------
-  // MOCK / DUMMY DATA — swap with Firestore query results later.
-  // Keep these same field names so the UI below needs no changes.
-  // ---------------------------------------------------------------------
-
-  final int _totalOwners = 28;
-  final int _pendingDueCount = 12;
-  final int _fullyClearedCount = 16;
-
   final List<String> _seasons = [
-    '2024 Season',
-    '2023 Season',
-    '2022',
+    '2030 Season',
+    '2029 Season',
+    '2028 Season',
+    '2027 Season',
+    '2026 Season',
     'All Years',
-  ];
-
-  final List<_LandOwner> _owners = [
-    _LandOwner(
-      name: 'Balwinder Singh D',
-      isVerified: false,
-      acres: 12.5,
-      plot: 'Plot #PL-409 • Zone B',
-      date: '14 Oct 2024',
-      shifts: const ['Shift 1', 'Shift 2'],
-      advancePaid: '₹40,000',
-      totalYieldFee: '₹1,25,000',
-      settlementStatus: SettlementStatus.pending,
-      settlementAmount: '₹85,000',
-    ),
-    _LandOwner(
-      name: 'Gurmeet Kaur',
-      isVerified: true,
-      acres: 8.0,
-      plot: 'Plot #PL-112 • Zone A',
-      date: '18 Oct 2024',
-      shifts: const ['Shift 3'],
-      advancePaid: '₹80,000',
-      totalYieldFee: '₹80,000',
-      settlementStatus: SettlementStatus.cleared,
-      settlementAmount: '₹0',
-    ),
-    _LandOwner(
-      name: 'Rajinder Prasad',
-      isVerified: false,
-      acres: 15.2,
-      plot: 'Plot #PL-884 • Sector 4',
-      date: '22 Oct 2024',
-      shifts: const ['Shift 1', 'Shift 3'],
-      advancePaid: '₹60,000',
-      totalYieldFee: '₹1,52,000',
-      settlementStatus: SettlementStatus.pending,
-      settlementAmount: '₹92,000',
-    ),
-    _LandOwner(
-      name: 'Harpreet Verma',
-      isVerified: true,
-      acres: 6.0,
-      plot: 'Plot #PL-305 • East Ridge',
-      date: '25 Oct 2024',
-      shifts: const ['Shift 2'],
-      advancePaid: '₹60,000',
-      totalYieldFee: '₹60,000',
-      settlementStatus: SettlementStatus.cleared,
-      settlementAmount: '₹0',
-    ),
   ];
 
   final _ownerService = OwnerService();
   final _searchController = TextEditingController();
 
-  // Created once, so typing in the search box does not re-subscribe to Firestore.
+  // Created once so typing in the search box does not re-subscribe
+  late final Stream<List<LandOwner>> _ownersStream = _ownerService
+      .watchOwners();
 
-  // late final Stream<List <LandOwner>> _ownersStream = _ownerService.watchOwners();
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -118,12 +66,91 @@ class _OwnersScreenState extends State<OwnersScreen> {
                 ),
                 const SizedBox(height: 16),
                 Expanded(
-                  child: ListView.separated(
-                    padding: const EdgeInsets.fromLTRB(20, 0, 20, 100),
-                    itemCount: _owners.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 14),
-                    itemBuilder: (context, index) =>
-                        _OwnerCard(owner: _owners[index]),
+                  child: StreamBuilder<List<LandOwner>>(
+                    stream: _ownersStream,
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return const Center(child: CircularProgressIndicator());
+                      }
+
+                      if (snapshot.hasError) {
+                        return Center(
+                          child: Padding(
+                            padding: const EdgeInsets.all(24),
+                            child: Text(
+                              'Could not load owners.\n${snapshot.error}',
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(color: AppColors.danger),
+                            ),
+                          ),
+                        );
+                      }
+
+                      final owners = snapshot.data ?? [];
+                      final filtered = _applyFilter(owners);
+
+                      // Live counts for the filter chips / header
+                      final total = owners.length;
+                      final pending = owners
+                          .where(
+                            (o) =>
+                                o.settlementStatus == SettlementStatus.pending,
+                          )
+                          .length;
+                      final cleared = owners
+                          .where(
+                            (o) =>
+                                o.settlementStatus == SettlementStatus.cleared,
+                          )
+                          .length;
+
+                      // Rebuild the filter chips with real numbers
+                      // (we pass them down via a small helper)
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        // only update if numbers actually changed
+                        // (avoids unnecessary setState loops)
+                      });
+
+                      if (filtered.isEmpty) {
+                        return Center(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.landscape_outlined,
+                                size: 48,
+                                color: AppColors.textMuted.withOpacity(0.5),
+                              ),
+                              const SizedBox(height: 12),
+                              const Text(
+                                'No owners yet',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.textPrimary,
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              const Text(
+                                'Tap + Add Owner to create the first record',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: AppColors.textMuted,
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      }
+
+                      return ListView.separated(
+                        padding: const EdgeInsets.fromLTRB(20, 0, 20, 100),
+                        itemCount: filtered.length,
+                        separatorBuilder: (_, __) => const SizedBox(height: 14),
+                        itemBuilder: (context, index) =>
+                            _OwnerCard(owner: filtered[index]),
+                      );
+                    },
                   ),
                 ),
                 _buildSyncFooter(),
@@ -149,6 +176,22 @@ class _OwnersScreenState extends State<OwnersScreen> {
         ],
       ),
     );
+  }
+
+  // ---------------- Filter logic ----------------
+  List<LandOwner> _applyFilter(List<LandOwner> all) {
+    switch (_selectedFilterIndex) {
+      case 1: // Pending Due
+        return all
+            .where((o) => o.settlementStatus == SettlementStatus.pending)
+            .toList();
+      case 2: // Fully Cleared
+        return all
+            .where((o) => o.settlementStatus == SettlementStatus.cleared)
+            .toList();
+      default:
+        return all;
+    }
   }
 
   // ---------------- Header ----------------
@@ -228,67 +271,74 @@ class _OwnersScreenState extends State<OwnersScreen> {
 
   // ---------------- Title Row ----------------
   Widget _buildTitleRow() {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'ASSET REGISTRY',
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.accentPink,
-                  letterSpacing: 1.0,
-                ),
+    return StreamBuilder<List<LandOwner>>(
+      stream: _ownersStream,
+      builder: (context, snapshot) {
+        final total = snapshot.data?.length ?? 0;
+
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'ASSET REGISTRY',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.accentPink,
+                      letterSpacing: 1.0,
+                    ),
+                  ),
+                  SizedBox(height: 4),
+                  Text(
+                    'Land Owner\nRecords',
+                    style: TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.textPrimary,
+                      height: 1.2,
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(height: 4),
-              const Text(
-                'Land Owner\nRecords',
-                style: TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.w800,
-                  color: AppColors.textPrimary,
-                  height: 1.2,
-                ),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+              decoration: BoxDecoration(
+                color: AppColors.surfaceElevated,
+                borderRadius: BorderRadius.circular(20),
               ),
-            ],
-          ),
-        ),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-          decoration: BoxDecoration(
-            color: AppColors.surfaceElevated,
-            borderRadius: BorderRadius.circular(20),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 6,
-                height: 6,
-                decoration: const BoxDecoration(
-                  color: AppColors.success,
-                  shape: BoxShape.circle,
-                ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 6,
+                    height: 6,
+                    decoration: const BoxDecoration(
+                      color: AppColors.success,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    '$total Total\nOwners',
+                    textAlign: TextAlign.left,
+                    style: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textPrimary,
+                      height: 1.2,
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(width: 6),
-              Text(
-                '$_totalOwners Total\nOwners',
-                textAlign: TextAlign.left,
-                style: const TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.textPrimary,
-                  height: 1.2,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -306,20 +356,19 @@ class _OwnersScreenState extends State<OwnersScreen> {
           const SizedBox(width: 10),
           Expanded(
             child: TextField(
+              controller: _searchController,
               style: const TextStyle(
                 fontSize: 14,
                 color: AppColors.textPrimary,
               ),
-              decoration: InputDecoration(
+              decoration: const InputDecoration(
                 hintText: 'Search by owner name, plot or phone...',
-                hintStyle: const TextStyle(
-                  fontSize: 13,
-                  color: AppColors.textMuted,
-                ),
+                hintStyle: TextStyle(fontSize: 13, color: AppColors.textMuted),
                 border: InputBorder.none,
                 isDense: true,
-                contentPadding: const EdgeInsets.symmetric(vertical: 14),
+                contentPadding: EdgeInsets.symmetric(vertical: 14),
               ),
+              onChanged: (_) => setState(() {}), // triggers rebuild for search
             ),
           ),
           const Icon(
@@ -367,85 +416,99 @@ class _OwnersScreenState extends State<OwnersScreen> {
     );
   }
 
-  // ---------------- Filter Chips ----------------
+  // ---------------- Filter Chips (live counts) ----------------
   Widget _buildFilterChips() {
-    final filters = [
-      ('All Records', '$_totalOwners', null),
-      ('Pending Due', '$_pendingDueCount', AppColors.danger),
-      ('Fully Cleared', '$_fullyClearedCount', AppColors.success),
-    ];
+    return StreamBuilder<List<LandOwner>>(
+      stream: _ownersStream,
+      builder: (context, snapshot) {
+        final owners = snapshot.data ?? [];
+        final total = owners.length;
+        final pending = owners
+            .where((o) => o.settlementStatus == SettlementStatus.pending)
+            .length;
+        final cleared = owners
+            .where((o) => o.settlementStatus == SettlementStatus.cleared)
+            .length;
 
-    return SizedBox(
-      height: 38,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        itemCount: filters.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 10),
-        itemBuilder: (context, index) {
-          final isSelected = index == _selectedFilterIndex;
-          final (label, count, dotColor) = filters[index];
+        final filters = [
+          ('All Records', '$total', null),
+          ('Pending Due', '$pending', AppColors.danger),
+          ('Fully Cleared', '$cleared', AppColors.success),
+        ];
 
-          return GestureDetector(
-            onTap: () => setState(() => _selectedFilterIndex = index),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14),
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: isSelected
-                    ? AppColors.surfaceElevated
-                    : AppColors.surface,
-                borderRadius: BorderRadius.circular(18),
-                border: Border.all(
-                  color: isSelected ? AppColors.border : Colors.transparent,
+        return SizedBox(
+          height: 38,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemCount: filters.length,
+            separatorBuilder: (_, __) => const SizedBox(width: 10),
+            itemBuilder: (context, index) {
+              final isSelected = index == _selectedFilterIndex;
+              final (label, count, dotColor) = filters[index];
+
+              return GestureDetector(
+                onTap: () => setState(() => _selectedFilterIndex = index),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14),
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: isSelected
+                        ? AppColors.surfaceElevated
+                        : AppColors.surface,
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(
+                      color: isSelected ? AppColors.border : Colors.transparent,
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (dotColor != null) ...[
+                        Container(
+                          width: 6,
+                          height: 6,
+                          decoration: BoxDecoration(
+                            color: dotColor,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                      ],
+                      Text(
+                        label,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 1,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppColors.background,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          count,
+                          style: const TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.textPrimary,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (dotColor != null) ...[
-                    Container(
-                      width: 6,
-                      height: 6,
-                      decoration: BoxDecoration(
-                        color: dotColor,
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                    const SizedBox(width: 6),
-                  ],
-                  Text(
-                    label,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.textPrimary,
-                    ),
-                  ),
-                  const SizedBox(width: 6),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 6,
-                      vertical: 1,
-                    ),
-                    decoration: BoxDecoration(
-                      color: AppColors.background,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(
-                      count,
-                      style: const TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.textPrimary,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          );
-        },
-      ),
+              );
+            },
+          ),
+        );
+      },
     );
   }
 
@@ -468,10 +531,12 @@ class _OwnersScreenState extends State<OwnersScreen> {
   }
 }
 
-//------------- Owner Card-------------
+// // ---------*************----------------
+// Owner Card
+// // ---------*************----------------
 
 class _OwnerCard extends StatelessWidget {
-  final _LandOwner owner;
+  final LandOwner owner;
 
   const _OwnerCard({required this.owner});
 
@@ -511,7 +576,7 @@ class _OwnerCard extends StatelessWidget {
                       children: [
                         Flexible(
                           child: Text(
-                            owner.name,
+                            owner.fullName,
                             style: const TextStyle(
                               fontSize: 15,
                               fontWeight: FontWeight.w700,
@@ -570,7 +635,7 @@ class _OwnerCard extends StatelessWidget {
                     ),
                     const SizedBox(width: 4),
                     Text(
-                      '${owner.acres} Acres',
+                      '${owner.totalAcres} Acres',
                       style: const TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w700,
@@ -595,7 +660,7 @@ class _OwnerCard extends StatelessWidget {
               ),
               const SizedBox(width: 6),
               Text(
-                owner.date,
+                owner.dateFormatted,
                 style: const TextStyle(
                   fontSize: 12,
                   color: AppColors.textSecondary,
@@ -644,21 +709,21 @@ class _OwnerCard extends StatelessWidget {
                 Expanded(
                   child: _FinancialColumn(
                     label: 'ADVANCE PAID',
-                    value: owner.advancePaid,
+                    value: owner.advancePaidFormatted,
                   ),
                 ),
                 Expanded(
                   child: _FinancialColumn(
                     label: 'TOTAL YIELD FEE',
-                    value: owner.totalYieldFee,
+                    value: owner.totalYieldFeeFormatted,
                   ),
                 ),
                 Expanded(
                   child: _FinancialColumn(
                     label: 'SETTLEMENT',
                     value: isPending
-                        ? 'Pending ${owner.settlementAmount}'
-                        : 'Cleared ${owner.settlementAmount}',
+                        ? ' ${owner.settlementAmountFormatted}'
+                        : ' ${owner.settlementAmountFormatted}',
                     valueColor: isPending
                         ? AppColors.danger
                         : AppColors.success,
@@ -713,9 +778,9 @@ class _FinancialColumn extends StatelessWidget {
   }
 }
 
-// ===========================================================================
+// ---------*************----------------
 // Add Owner Floating Button
-// ===========================================================================
+// ---------*************----------------
 
 class _AddOwnerButton extends StatelessWidget {
   final VoidCallback onTap;
@@ -781,36 +846,4 @@ class _AddOwnerButton extends StatelessWidget {
       ],
     );
   }
-}
-
-// ===========================================================================
-// Data model
-// ===========================================================================
-
-enum SettlementStatus { pending, cleared }
-
-class _LandOwner {
-  final String name;
-  final bool isVerified;
-  final double acres;
-  final String plot;
-  final String date;
-  final List<String> shifts;
-  final String advancePaid;
-  final String totalYieldFee;
-  final SettlementStatus settlementStatus;
-  final String settlementAmount;
-
-  _LandOwner({
-    required this.name,
-    required this.isVerified,
-    required this.acres,
-    required this.plot,
-    required this.date,
-    required this.shifts,
-    required this.advancePaid,
-    required this.totalYieldFee,
-    required this.settlementStatus,
-    required this.settlementAmount,
-  });
 }
