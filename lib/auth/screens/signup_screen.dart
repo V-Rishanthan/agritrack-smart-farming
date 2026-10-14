@@ -1,6 +1,7 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:smart_farming/services/auth_service.dart';
 import 'package:smart_farming/theme/app_colors.dart' show AppColors;
 
 class SignupScreen extends StatefulWidget {
@@ -16,8 +17,11 @@ class _SignupScreenState extends State<SignupScreen> {
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
 
+  final _authService = AuthService();
+
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
+  bool _isLoading = false;
   // bool _agreedToTerms = false;
 
   @override
@@ -27,6 +31,63 @@ class _SignupScreenState extends State<SignupScreen> {
     _passwordController.dispose();
     _confirmPasswordController.dispose();
     super.dispose();
+  }
+
+  // ---------- Helpers ----------
+  void _showError(String message) {
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  Future<void> _register() async {
+    if (_isLoading) return; // ignore double taps
+
+    final name = _fullNameController.text.trim();
+    final email = _emailController.text.trim();
+    final password = _passwordController.text;
+
+    // Check the inputs before calling Firebase
+    if (name.isEmpty || email.isEmpty || password.isEmpty) {
+      _showError('Please fill in all fields.');
+      return;
+    }
+
+    if (!RegExp(r'^[\w\.\-]+@([\w\-]+\.)+[\w\-]{2,}$').hasMatch(email)) {
+      _showError('Enter a valid email address.');
+      return;
+    }
+
+    if (password.length < 6) {
+      _showError('Password must be at least 8 characters.');
+      return;
+    }
+
+    if (password != _confirmPasswordController.text) {
+      _showError('Passwords do not match.');
+      return;
+    }
+
+    // Create the account in Firebase
+    setState(() {
+      _isLoading = true;
+    });
+    final error = await _authService.register(
+      name: name,
+      email: email,
+      password: password,
+    );
+
+    if (!mounted) return;
+    setState(() => _isLoading = false);
+
+    if (error != null) {
+      _showError(error);
+      return;
+    }
+
+    // Success -> go to the home screen
+    context.go('/home');
   }
 
   @override
@@ -289,6 +350,7 @@ class _SignupScreenState extends State<SignupScreen> {
 
                   const SizedBox(height: 20),
                   // ---------- Create Account Button ----------
+                  // ---------- Create Account Button ----------
                   SizedBox(
                     height: 56,
                     child: DecoratedBox(
@@ -296,34 +358,41 @@ class _SignupScreenState extends State<SignupScreen> {
                         gradient: AppColors.primaryGradient,
                         borderRadius: BorderRadius.circular(28),
                       ),
-
                       child: Material(
                         color: Colors.transparent,
                         child: InkWell(
                           borderRadius: BorderRadius.circular(28),
-                          onTap: () {
-                            context.go('/home');
-                          },
-                          child: const Center(
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(
-                                  Icons.person_add_alt_1_outlined,
-                                  color: AppColors.textPrimary,
-                                  size: 18,
-                                ),
-                                SizedBox(width: 8),
-                                Text(
-                                  'Create Account',
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w600,
-                                    color: AppColors.textPrimary,
+                          onTap: _isLoading ? null : _register, // ← fixed
+                          child: Center(
+                            // ← fixed
+                            child: _isLoading
+                                ? const SizedBox(
+                                    width: 22,
+                                    height: 22,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2.5,
+                                      color: AppColors.textPrimary,
+                                    ),
+                                  )
+                                : const Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(
+                                        Icons.person_add_alt_1_outlined,
+                                        color: AppColors.textPrimary,
+                                        size: 18,
+                                      ),
+                                      SizedBox(width: 8),
+                                      Text(
+                                        'Create Account',
+                                        style: TextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.w600,
+                                          color: AppColors.textPrimary,
+                                        ),
+                                      ),
+                                    ],
                                   ),
-                                ),
-                              ],
-                            ),
                           ),
                         ),
                       ),

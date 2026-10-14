@@ -1,47 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:calendar_date_picker2/calendar_date_picker2.dart';
+import 'package:smart_farming/services/expense_service.dart'; // NEW
 import 'package:smart_farming/theme/app_colors.dart' show AppColors;
 
 /// The four tiles under "Expense classification".
 enum ExpenseType { fuel, service, spares, other }
-
-/// What this screen hands back to the previous screen when the user taps
-/// "Save Expense" (via Navigator.pop). Cancel / back returns null.
-class NewExpense {
-  final String name;
-  final double amount;
-  final DateTime date;
-  final String notes;
-  final ExpenseType type;
-
-  const NewExpense({
-    required this.name,
-    required this.amount,
-    required this.date,
-    required this.notes,
-    required this.type,
-  });
-
-  /// e.g. "Nov 15, 2026" — same style as the ledger tiles.
-  String get dateLabel {
-    const months = [
-      'Jan',
-      'Feb',
-      'Mar',
-      'Apr',
-      'May',
-      'Jun',
-      'Jul',
-      'Aug',
-      'Sep',
-      'Oct',
-      'Nov',
-      'Dec',
-    ];
-    return '${months[date.month - 1]} ${date.day}, ${date.year}';
-  }
-}
 
 class AddExpensesScreen extends StatefulWidget {
   const AddExpensesScreen({super.key});
@@ -56,6 +20,9 @@ class _AddExpensesScreenState extends State<AddExpensesScreen> {
   final _nameController = TextEditingController(text: 'Fuel');
   final _priceController = TextEditingController();
   final _notesController = TextEditingController();
+
+  final _expenseService = ExpenseService(); // NEW
+  bool _isSaving = false; // NEW
 
   ExpenseType _type = ExpenseType.fuel;
   DateTime _date = DateTime.now();
@@ -195,19 +162,34 @@ class _AddExpensesScreenState extends State<AddExpensesScreen> {
     return null;
   }
 
-  void _save() {
+  // ---------------- Save to Firestore  ----------------
+  Future<void> _save() async {
+    if (_isSaving) return; // ignore double taps
+
+    // 1. Check the form fields
     if (!(_formKey.currentState?.validate() ?? false)) return;
 
-    Navigator.pop(
-      context,
-      NewExpense(
-        name: _nameController.text.trim(),
-        amount: double.parse(_priceController.text.trim()),
-        date: _date,
-        notes: _notesController.text.trim(),
-        type: _type,
-      ),
+    // 2. Save
+    setState(() => _isSaving = true);
+    final error = await _expenseService.addExpense(
+      name: _nameController.text,
+      amount: double.parse(_priceController.text.trim()),
+      date: _date,
+      notes: _notesController.text,
+      type: _type.name, // 'fuel' | 'service' | 'spares' | 'other'
     );
+    if (!mounted) return;
+    setState(() => _isSaving = false);
+
+    if (error != null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error)));
+      return;
+    }
+
+    // 3. Saved -> close this screen. The Expenses list updates by itself.
+    Navigator.pop(context);
   }
 
   // ---------------- Build ----------------
@@ -556,7 +538,7 @@ class _AddExpensesScreenState extends State<AddExpensesScreen> {
             borderRadius: BorderRadius.circular(18),
             child: InkWell(
               borderRadius: BorderRadius.circular(18),
-              onTap: () => Navigator.pop(context),
+              onTap: _isSaving ? null : () => Navigator.pop(context),
               child: const Padding(
                 padding: EdgeInsets.symmetric(vertical: 18),
                 child: Center(
@@ -592,27 +574,39 @@ class _AddExpensesScreenState extends State<AddExpensesScreen> {
               color: Colors.transparent,
               child: InkWell(
                 borderRadius: BorderRadius.circular(18),
-                onTap: _save,
-                child: const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 18),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        Icons.check_circle_outline,
-                        color: Colors.white,
-                        size: 18,
-                      ),
-                      SizedBox(width: 8),
-                      Text(
-                        'Save Expense',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                          color: Colors.white,
-                        ),
-                      ),
-                    ],
+                // null disables the button while saving
+                onTap: _isSaving ? null : _save,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 18),
+                  child: Center(
+                    child: _isSaving
+                        ? const SizedBox(
+                            width: 22,
+                            height: 22,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2.5,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Icons.check_circle_outline,
+                                color: Colors.white,
+                                size: 18,
+                              ),
+                              SizedBox(width: 8),
+                              Text(
+                                'Save Expense',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w700,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ],
+                          ),
                   ),
                 ),
               ),

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:smart_farming/auth/screens/login_screen.dart';
@@ -9,15 +10,53 @@ import 'package:smart_farming/features/home/home_screen.dart';
 import 'package:smart_farming/features/onboarding.dart';
 import 'package:smart_farming/features/owners/screens/owners_screen.dart';
 import 'package:smart_farming/features/widgets/bottom_nav_bar.dart';
+import 'package:smart_farming/services/auth_service.dart';
 
 final GlobalKey<NavigatorState> _rootNavigatorKey = GlobalKey<NavigatorState>(
   debugLabel: 'root',
 );
 
+final _authService = AuthService();
+
+/// Makes GoRouter run `redirect` again every time the user signs in or out.
+class _AuthRefresh extends ChangeNotifier {
+  _AuthRefresh(Stream<dynamic> stream) {
+    _subscription = stream.listen((_) => notifyListeners());
+  }
+
+  late final StreamSubscription<dynamic> _subscription;
+
+  @override
+  void dispose() {
+    _subscription.cancel();
+    super.dispose();
+  }
+}
+
+/// Screens a signed-out user is allowed to see.
+const _publicPages = ['/onboarding', '/login', '/signup'];
+
 final GoRouter appRouter = GoRouter(
   navigatorKey: _rootNavigatorKey,
   initialLocation: '/onboarding',
   debugLogDiagnostics: false,
+
+  // Re-check the redirect below whenever login state changes
+  refreshListenable: _AuthRefresh(_authService.authStateChanges),
+
+  redirect: (context, state) {
+    final loggedIn = _authService.currentUser != null;
+    final onPublicPage = _publicPages.contains(state.matchedLocation);
+
+    // Signed out and trying to open an app screen -> send to onboarding
+    if (!loggedIn && !onPublicPage) return '/onboarding';
+
+    // Already signed in but on onboarding / login / signup - go to home
+    if (loggedIn && onPublicPage) return '/home';
+
+    return null; // no redirect, stay where you are
+  },
+
   routes: [
     GoRoute(path: '/', redirect: (_, __) => '/onboarding'),
     GoRoute(

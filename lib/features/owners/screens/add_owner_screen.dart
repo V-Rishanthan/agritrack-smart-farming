@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:smart_farming/services/owner_service.dart';
 import 'package:smart_farming/theme/app_colors.dart';
 import 'package:calendar_date_picker2/calendar_date_picker2.dart';
 
@@ -14,6 +15,9 @@ class _AddOwnerScreenState extends State<AddOwnerScreen> {
   final _totalAcresController = TextEditingController(text: '12.5');
   final _ratePerAcreController = TextEditingController(text: '10000');
   final _advanceAmountController = TextEditingController(text: '40000');
+
+  final _ownerService = OwnerService();
+  bool _isSaving = false;
 
   @override
   void dispose() {
@@ -82,6 +86,66 @@ class _AddOwnerScreenState extends State<AddOwnerScreen> {
     }
   }
 
+  // ---------------- Save to Firestore  ----------------
+
+  void _showMessage(String message) {
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  Future<void> _save() async {
+    if (_isSaving) return;
+
+    final name = _fullNameController.text.trim();
+    final acres = double.tryParse(_totalAcresController.text.trim());
+    final rate = double.tryParse(_ratePerAcreController.text.trim());
+    final advance = double.tryParse(_advanceAmountController.text.trim()) ?? 0;
+
+    // Check the inputs before calling Firestore
+    if (name.isEmpty) {
+      _showMessage('Please enter the owner name.');
+      return;
+    }
+    if (acres == null || acres <= 0) {
+      _showMessage('Enter the total acres.');
+      return;
+    }
+    if (rate == null || rate <= 0) {
+      _showMessage('Enter the rate per acre.');
+      return;
+    }
+    if (_selectedShifts.isEmpty) {
+      _showMessage('Select at least one shift.');
+      return;
+    }
+    if (advance > acres * rate) {
+      _showMessage('Advance cannot be more than the total amount.');
+      return;
+    }
+
+    //  Save
+    setState(() => _isSaving = true);
+    final error = await _ownerService.addOwner(
+      fullName: name,
+      totalAcres: acres,
+      flowingDate: _flowingDate,
+      shifts: _selectedShifts.toList()..sort(),
+      ratePerAcre: rate,
+      advanceAmount: advance,
+    );
+    if (!mounted) return;
+    setState(() => _isSaving = false);
+
+    if (error != null) {
+      _showMessage(error);
+      return;
+    }
+
+    //  Saved - close this screen
+    Navigator.pop(context);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -144,6 +208,8 @@ class _AddOwnerScreenState extends State<AddOwnerScreen> {
               ),
               const SizedBox(height: 20),
               _buildLedgerBox(),
+              const SizedBox(height: 24),
+              _buildActionButtons(),
             ],
           ),
         ),
@@ -296,6 +362,7 @@ class _AddOwnerScreenState extends State<AddOwnerScreen> {
       ),
     );
   }
+  // ---------------- Cancel / Save buttons ----------------
 
   // ---------------- Helpers ----------------
   String _formatAmount(double amount) {
@@ -571,6 +638,89 @@ class _AddOwnerScreenState extends State<AddOwnerScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  // ---------------- Cancel / Save buttons ----------------
+
+  Widget _buildActionButtons() {
+    return Row(
+      children: [
+        Expanded(
+          child: Material(
+            color: AppColors.surfaceElevated,
+            borderRadius: BorderRadius.circular(18),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(18),
+              onTap: _isSaving ? null : () => Navigator.pop(context),
+              child: const Padding(
+                padding: EdgeInsets.symmetric(vertical: 18),
+                child: Center(
+                  child: Text(
+                    'Cancel',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          flex: 2,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: AppColors.primaryGradient,
+              borderRadius: BorderRadius.circular(18),
+            ),
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                borderRadius: BorderRadius.circular(18),
+                // null disables the button while saving
+                onTap: _isSaving ? null : _save,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 18),
+                  child: Center(
+                    child: _isSaving
+                        ? const SizedBox(
+                            width: 22,
+                            height: 22,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2.5,
+                              color: AppColors.textPrimary,
+                            ),
+                          )
+                        : const Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Icons.save_outlined,
+                                color: AppColors.textPrimary,
+                                size: 18,
+                              ),
+                              SizedBox(width: 8),
+                              Text(
+                                'Save Record',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppColors.textPrimary,
+                                ),
+                              ),
+                            ],
+                          ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

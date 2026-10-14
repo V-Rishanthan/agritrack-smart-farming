@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:smart_farming/features/owners/screens/add_owner_screen.dart'
     show AddOwnerScreen;
+import 'package:smart_farming/services/owner_service.dart';
 import 'package:smart_farming/theme/app_colors.dart' show AppColors;
 
 class OwnersScreen extends StatefulWidget {
@@ -82,6 +83,13 @@ class _OwnersScreenState extends State<OwnersScreen> {
     ),
   ];
 
+  final _ownerService = OwnerService();
+  final _searchController = TextEditingController();
+
+  // Created once, so typing in the search box does not re-subscribe to Firestore.
+
+  // late final Stream<List <LandOwner>> _ownersStream = _ownerService.watchOwners();
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -140,10 +148,6 @@ class _OwnersScreenState extends State<OwnersScreen> {
           ),
         ],
       ),
-      // bottomNavigationBar: AppBottomNavBar(
-      //   currentIndex: _currentNavIndex,
-      //   onTap: (index) => setState(() => _currentNavIndex = index),
-      // ),
     );
   }
 

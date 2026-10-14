@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:smart_farming/features/expenses/screens/add_expenses_screen.dart'
     show AddExpensesScreen;
+import 'package:smart_farming/services/expense_service.dart'; // NEW
 import 'package:smart_farming/theme/app_colors.dart' show AppColors;
 import 'package:calendar_date_picker2/calendar_date_picker2.dart';
 
@@ -13,6 +14,7 @@ class _Expense {
   final double amount;
   final ExpenseCategory category;
   final IconData icon;
+  final int year; // NEW - used for the year filter
 
   const _Expense({
     required this.title,
@@ -21,6 +23,7 @@ class _Expense {
     required this.amount,
     required this.category,
     required this.icon,
+    required this.year,
   });
 }
 
@@ -32,10 +35,16 @@ class ExpensesScreen extends StatefulWidget {
 }
 
 class _ExpensesScreenState extends State<ExpensesScreen> {
-  final double expenses = 68450;
   static const String _currency = 'LKR';
   int _selectedYear = DateTime.now().year;
   ExpenseCategory _selectedCategory = ExpenseCategory.all;
+
+  // NEW - the service + a live stream of the saved expenses.
+  // The stream is created ONCE here (not inside build), otherwise every
+  // rebuild would open a new connection to Firestore.
+  final _expenseService = ExpenseService();
+  late final Stream<List<Map<String, dynamic>>> _expensesStream =
+      _expenseService.watchExpenses();
 
   String _formatAmount(double amount) {
     final wholePart = amount.toInt().toString();
@@ -49,46 +58,58 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
     return '$restWithCommas,$lastThree';
   }
 
-  // MOCK data — swap with Firestore values later.
+  // e.g. "Nov 15, 2026"
+  String _formatDate(DateTime d) {
+    const months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
+    return '${months[d.month - 1]} ${d.day}, ${d.year}';
+  }
 
-  final List<_Expense> _allExpenses = const [
-    _Expense(
-      title: '50L Diesel Refill - Pump #4',
-      date: 'Today, 08:30 AM',
-      ref: 'JD 5310',
-      amount: 4650,
-      category: ExpenseCategory.fuel,
-      icon: Icons.local_gas_station_outlined,
-    ),
-    _Expense(
-      title: 'Engine Oil & Filter Replacement',
-      date: 'Oct 22, 2024',
-      ref: 'Inv #902',
-      amount: 8200,
-      category: ExpenseCategory.maintenance,
-      icon: Icons.build_outlined,
-    ),
-    _Expense(
-      title: '120L Bulk Tanker Fill',
-      date: 'Oct 18, 2024',
-      ref: 'Field Tank A',
-      amount: 11160,
-      category: ExpenseCategory.fuel,
-      icon: Icons.local_gas_station_outlined,
-    ),
-    _Expense(
-      title: 'Hydraulic Pipe Fitting',
-      date: 'Oct 15, 2024',
-      ref: 'Sharma Agro',
-      amount: 2400,
-      category: ExpenseCategory.other,
-      icon: Icons.settings_input_component_outlined,
-    ),
-  ];
+  // NEW - turns one saved expense (a Map from the service) into an _Expense.
+  _Expense _expenseFromMap(Map<String, dynamic> m) {
+    final type = m['type'] as String; // 'fuel' | 'service' | 'spares' | 'other'
+    final date = m['date'] as DateTime;
+    final notes = m['notes'] as String;
 
-  List<_Expense> get _filteredExpenses {
-    if (_selectedCategory == ExpenseCategory.all) return _allExpenses;
-    return _allExpenses.where((e) => e.category == _selectedCategory).toList();
+    // Service and Spares both count as "Maintenance" in the ledger
+    final ExpenseCategory category;
+    final IconData icon;
+    switch (type) {
+      case 'fuel':
+        category = ExpenseCategory.fuel;
+        icon = Icons.local_gas_station_outlined;
+      case 'service':
+        category = ExpenseCategory.maintenance;
+        icon = Icons.build_outlined;
+      case 'spares':
+        category = ExpenseCategory.maintenance;
+        icon = Icons.settings_suggest_outlined;
+      default:
+        category = ExpenseCategory.other;
+        icon = Icons.settings_input_component_outlined;
+    }
+
+    return _Expense(
+      title: m['name'] as String,
+      date: _formatDate(date),
+      ref: notes.isEmpty ? '—' : notes,
+      amount: m['amount'] as double,
+      category: category,
+      icon: icon,
+      year: date.year,
+    );
   }
 
   // pick Year
@@ -140,47 +161,71 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final items = _filteredExpenses;
-
     return Scaffold(
       backgroundColor: AppColors.background,
       body: Stack(
         children: [
           SafeArea(
-            child: Column(
-              children: [
-                // ---------- Fixed part (does not scroll) ----------
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _buildHeader(),
-                      const SizedBox(height: 24),
-                      _buildTitleRow(),
-                      const SizedBox(height: 24),
-                      _buildSummaryCard(),
-                      const SizedBox(height: 24),
-                      _buildLedgerHeader(items.length),
-                      const SizedBox(height: 14),
-                      _buildFilterChips(),
-                      const SizedBox(height: 16),
-                    ],
-                  ),
-                ),
+            // NEW - StreamBuilder rebuilds this part every time Firestore sends
+            // a new list, so a saved expense appears without any refresh.
+            child: StreamBuilder<List<Map<String, dynamic>>>(
+              stream: _expensesStream,
+              builder: (context, snapshot) {
+                final all = (snapshot.data ?? const <Map<String, dynamic>>[])
+                    .map(_expenseFromMap)
+                    .toList();
 
-                // ---------- Scrollable part (only the tiles) ----------
-                Expanded(
-                  child: items.isEmpty
-                      ? Center(child: _buildEmptyState())
-                      : ListView.builder(
-                          padding: const EdgeInsets.fromLTRB(20, 0, 20, 100),
-                          itemCount: items.length,
-                          itemBuilder: (context, index) =>
-                              _buildExpenseTile(items[index]),
-                        ),
-                ),
-              ],
+                //  Only the selected year
+                final inYear = all
+                    .where((e) => e.year == _selectedYear)
+                    .toList();
+
+                // The summary card totals the whole year (all categories)
+                final total = inYear.fold<double>(
+                  0,
+                  (sum, e) => sum + e.amount,
+                );
+
+                //  Then the selected category chip
+                final items = _selectedCategory == ExpenseCategory.all
+                    ? inYear
+                    : inYear
+                          .where((e) => e.category == _selectedCategory)
+                          .toList();
+
+                return Column(
+                  children: [
+                    // ---------- Fixed part (does not scroll) ----------
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _buildHeader(),
+                          const SizedBox(height: 24),
+                          _buildTitleRow(),
+                          const SizedBox(height: 24),
+                          _buildSummaryCard(total),
+                          const SizedBox(height: 24),
+                          _buildLedgerHeader(items.length),
+                          const SizedBox(height: 14),
+                          _buildFilterChips(),
+                          const SizedBox(height: 16),
+                        ],
+                      ),
+                    ),
+
+                    // ---------- Scrollable part (only the tiles) ----------
+                    Expanded(
+                      child: _buildExpenseList(
+                        snapshot: snapshot,
+                        items: items,
+                        noExpensesThisYear: inYear.isEmpty,
+                      ),
+                    ),
+                  ],
+                );
+              },
             ),
           ),
 
@@ -191,6 +236,55 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
             child: _AddExpenseButton(onTap: _logNewExpense),
           ),
         ],
+      ),
+    );
+  }
+
+  // ---------------- Expense list (loading / error / empty / data) ----------------
+  Widget _buildExpenseList({
+    required AsyncSnapshot<List<Map<String, dynamic>>> snapshot,
+    required List<_Expense> items,
+    required bool noExpensesThisYear,
+  }) {
+    if (snapshot.hasError) {
+      return _buildMessage('Could not load expenses.\n${snapshot.error}');
+    }
+
+    // Still waiting for the first answer from Firestore
+    if (!snapshot.hasData) {
+      return const Center(
+        child: CircularProgressIndicator(color: AppColors.accentPink),
+      );
+    }
+
+    if (items.isEmpty) {
+      return _buildMessage(
+        noExpensesThisYear
+            ? 'No expenses recorded for $_selectedYear.\nTap "Add Expense" to log one.'
+            : 'No expenses in this category',
+      );
+    }
+
+    return ListView.builder(
+      padding: const EdgeInsets.fromLTRB(20, 0, 20, 100),
+      itemCount: items.length,
+      itemBuilder: (context, index) => _buildExpenseTile(items[index]),
+    );
+  }
+
+  Widget _buildMessage(String text) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 32),
+        child: Text(
+          text,
+          textAlign: TextAlign.center,
+          style: const TextStyle(
+            fontSize: 13,
+            color: AppColors.textMuted,
+            height: 1.5,
+          ),
+        ),
       ),
     );
   }
@@ -335,7 +429,7 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
   }
 
   // ---------------- Summary Card ----------------
-  Widget _buildSummaryCard() {
+  Widget _buildSummaryCard(double total) {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(18),
@@ -358,7 +452,7 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
           ),
           const SizedBox(height: 14),
           Text(
-            'LKR ${_formatAmount(expenses)}',
+            'LKR ${_formatAmount(total)}',
             style: const TextStyle(
               fontSize: 28,
               fontWeight: FontWeight.w700,
@@ -471,17 +565,6 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
     );
   }
 
-  // ---------------- Empty State ----------------
-  Widget _buildEmptyState() {
-    return const Padding(
-      padding: EdgeInsets.symmetric(vertical: 40),
-      child: Text(
-        'No expenses in this category',
-        style: TextStyle(fontSize: 13, color: AppColors.textMuted),
-      ),
-    );
-  }
-
   // ---------------- Expense Tile ----------------
   Widget _buildExpenseTile(_Expense e) {
     return Container(
@@ -560,8 +643,6 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
       ),
     );
   }
-
-  // ---------------- Add Expense Floating Button ----------------
 }
 
 class _AddExpenseButton extends StatelessWidget {
